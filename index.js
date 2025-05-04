@@ -2,9 +2,9 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const { db } = require('./firebase');
-const crypto = require('crypto');
+const bodyParser = require('body-parser');
 
-app.use(express.json());
+app.use(bodyParser.json());
 app.use(cors({ origin: '*' }));
 
 app.get('/', (req, res) => {
