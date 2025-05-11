@@ -204,203 +204,590 @@ app.get('/getAllUsers', async (req, res) => {
   }
 });
 
-// Helper function to get triple prices from a material entry
-const getPriceTriple = (entry = {}) => {
-  const single = entry.price;
-  const p1 = entry.price1 ?? single ?? 0;
-  const p2 = entry.price2 ?? single ?? 0;
-  const p3 = entry.price3 ?? single ?? 0;
-  return [p1, p2, p3];
-};
-
-// Add Item Endpoint
-app.post('/addItem', async (req, res) => {
-  const {
-    productId,
-    category,
-    subcategory,
-    imageUrl,
-    grossWeight,
-    makingCharges,
-    wastagePercent,
-    materialsUsed, // Array: [{ materialName, quantity }]
-  } = req.body;
-
-  if (
-    !productId ||
-    !category ||
-    !subcategory ||
-    !imageUrl ||
-    !grossWeight ||
-    makingCharges === undefined ||
-    wastagePercent === undefined ||
-    !Array.isArray(materialsUsed) ||
-    materialsUsed.length === 0
-  ) {
-    return res.status(400).json({
-      success: false,
-      message: 'Missing required fields or invalid format',
-    });
-  }
-
+app.get('/getAllPrices', async (req, res) => {
   try {
-    const pricesSnapshot = await db.collection('PRICES').doc(category).get();
-    if (!pricesSnapshot.exists) {
-      return res.status(404).json({
-        success: false,
-        message: `No pricing data found for category: ${category}`,
-      });
-    }
+    const snapshot = await db.collection('PRICES').get();
 
-    const priceData = pricesSnapshot.data();
-    let totalPrice1 = 0,
-      totalPrice2 = 0,
-      totalPrice3 = 0;
+    const PRICES = snapshot.docs.map((doc) => ({
+      docname: doc.id,
+      ...doc.data(),
+    }));
 
-    for (const item of materialsUsed) {
-      const [p1, p2, p3] = getPriceTriple(priceData[item.materialName]);
-      totalPrice1 += item.quantity * p1;
-      totalPrice2 += item.quantity * p2;
-      totalPrice3 += item.quantity * p3;
-    }
-
-    const [base1, base2, base3] = getPriceTriple(priceData['base']);
-
-    const wastageAmount1 = grossWeight * (wastagePercent / 100) * base1;
-    const wastageAmount2 = grossWeight * (wastagePercent / 100) * base2;
-    const wastageAmount3 = grossWeight * (wastagePercent / 100) * base3;
-
-    let making1 = 0,
-      making2 = 0,
-      making3 = 0;
-    if (typeof makingCharges === 'number') {
-      making1 = making2 = making3 = makingCharges;
-    } else if (typeof makingCharges === 'object') {
-      making1 = makingCharges.quote ?? 0;
-      making2 = makingCharges.RQ ?? 0;
-      making3 = makingCharges.FRQ ?? 0;
-    }
-
-    const quote = totalPrice1 + making1 + wastageAmount1;
-    const RQ = totalPrice2 + making2 + wastageAmount2;
-    const FRQ = totalPrice3 + making3 + wastageAmount3;
-
-    const itemData = {
-      productId,
-      category,
-      subcategory,
-      imageUrl,
-      grossWeight,
-      makingCharges,
-      wastagePercent,
-      materialsUsed,
-      prices: {
-        quote: parseFloat(quote.toFixed(2)),
-        RQ: parseFloat(RQ.toFixed(2)),
-        FRQ: parseFloat(FRQ.toFixed(2)),
-      },
-      timestamp: new Date(),
-    };
-
-    await db.collection('ITEMS').doc(productId).set(itemData);
-
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
-      message: 'Item added successfully',
-      data: itemData,
+      message: `${PRICES.length} PRICES retrieved`,
+      PRICES,
     });
   } catch (error) {
-    console.error('Error adding item:', error);
-    return res
-      .status(500)
-      .json({ success: false, message: 'Internal server error' });
+    console.error('Error fetching PRICES:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while fetching users',
+    });
   }
 });
 
-// Update Prices Endpoint
-app.post('/updatePrices', async (req, res) => {
-  const { updates } = req.body;
+// app.get('/getAllItems', async (req, res) => {
+//   try {
+//     const snapshot = await db.collection('ITEMS').get();
 
-  if (!updates || typeof updates !== 'object') {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid or missing "updates" object in request body',
-    });
-  }
+//     const ITEMS = snapshot.docs.map((doc) => ({
+//       category: doc.id,
+//       ...doc.data(),
+//     }));
 
+//     return res.status(200).json({
+//       success: true,
+//       message: `${ITEMS.length} ITEMS retrieved`,
+//       ITEMS,
+//     });
+//   } catch (error) {
+//     console.error('Error fetching ITEMS:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error while fetching users',
+//     });
+//   }
+// });
+
+app.get('/getAllItems', async (req, res) => {
   try {
-    const updatedItemsByCategory = {};
+    const [itemsSnapshot, priceSnapshot] = await Promise.all([
+      db.collection('ITEMS').get(),
+      db.collection('PRICES').get(),
+    ]);
 
-    for (const [category, categoryPrices] of Object.entries(updates)) {
-      await db.collection('PRICES').doc(category).set(categoryPrices);
+    const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data();
+      return acc;
+    }, {});
 
-      const itemsSnapshot = await db
-        .collection('ITEMS')
-        .where('category', '==', category)
-        .get();
-      const updatedItems = [];
+    const updatedItems = [];
 
-      for (const doc of itemsSnapshot.docs) {
-        const item = doc.data();
-        const { materialsUsed, grossWeight, makingCharges, wastagePercent } =
-          item;
+    for (const doc of itemsSnapshot.docs) {
+      const itemData = doc.data();
+      const { materialsUsed } = itemData;
+      const pricing = { base: 0, FRQ: 0, RQ: 0 };
 
-        let total1 = 0,
-          total2 = 0,
-          total3 = 0;
-        for (const mat of materialsUsed) {
-          const [p1, p2, p3] = getPriceTriple(categoryPrices[mat.materialName]);
-          total1 += mat.quantity * p1;
-          total2 += mat.quantity * p2;
-          total3 += mat.quantity * p3;
+      console.log(`\n--- Checking Item ${doc.id} ---\n`);
+
+      for (const materialGroup of materialsUsed) {
+        const docname = materialGroup.docname;
+        if (!docname || typeof docname !== 'string') continue;
+
+        const priceGroup = priceMap[docname];
+        if (!priceGroup) {
+          console.warn(`⚠ No price group found for ${docname}`);
+          continue;
         }
 
-        const [base1, base2, base3] = getPriceTriple(categoryPrices['base']);
+        console.log(`▶ Material Group: ${docname}`);
 
-        const wastage1 = ((grossWeight * wastagePercent) / 100) * base1;
-        const wastage2 = ((grossWeight * wastagePercent) / 100) * base2;
-        const wastage3 = ((grossWeight * wastagePercent) / 100) * base3;
+        for (const [materialType, quantity] of Object.entries(materialGroup)) {
+          if (materialType === 'docname' || isNaN(quantity)) continue;
 
-        let making1 = 0,
-          making2 = 0,
-          making3 = 0;
-        if (typeof makingCharges === 'number') {
-          making1 = making2 = making3 = makingCharges;
-        } else if (typeof makingCharges === 'object') {
-          making1 = makingCharges.quote ?? 0;
-          making2 = makingCharges.RQ ?? 0;
-          making3 = makingCharges.FRQ ?? 0;
+          const priceArray = priceGroup[materialType];
+          if (!Array.isArray(priceArray) || priceArray.length !== 3) {
+            console.warn(
+              `⚠ Invalid price array for ${materialType} in ${docname}`
+            );
+            continue;
+          }
+
+          const basePrice = priceArray[0] * quantity;
+          const frqPrice = priceArray[1] * quantity;
+          const rqPrice = priceArray[2] * quantity;
+
+          pricing.base += basePrice;
+          pricing.FRQ += frqPrice;
+          pricing.RQ += rqPrice;
+
+          const makingArray = priceGroup.MAKING || priceGroup.MAKINGCHARGES;
+          let makingBase = 0,
+            makingFRQ = 0,
+            makingRQ = 0;
+
+          if (Array.isArray(makingArray) && makingArray.length === 3) {
+            makingBase = makingArray[0] * quantity;
+            makingFRQ = makingArray[1] * quantity;
+            makingRQ = makingArray[2] * quantity;
+
+            pricing.base += makingBase;
+            pricing.FRQ += makingFRQ;
+            pricing.RQ += makingRQ;
+          }
+
+          const wastageArray = priceGroup.WASTAGE;
+          if (Array.isArray(wastageArray) && wastageArray.length === 3) {
+            pricing.base += (basePrice + makingBase) * (wastageArray[0] / 100);
+            pricing.FRQ += (frqPrice + makingFRQ) * (wastageArray[1] / 100);
+            pricing.RQ += (rqPrice + makingRQ) * (wastageArray[2] / 100);
+          }
         }
-
-        const updatedItemData = {
-          ...item,
-          prices: {
-            quote: parseFloat((total1 + making1 + wastage1).toFixed(2)),
-            RQ: parseFloat((total2 + making2 + wastage2).toFixed(2)),
-            FRQ: parseFloat((total3 + making3 + wastage3).toFixed(2)),
-          },
-        };
-
-        await db
-          .collection('ITEMS')
-          .doc(item.productId)
-          .update(updatedItemData);
-        updatedItems.push(item.productId);
       }
 
-      updatedItemsByCategory[category] = updatedItems;
+      const recalculated = {
+        base: Math.round(pricing.base * 100) / 100,
+        franchise: Math.round(pricing.FRQ * 100) / 100,
+        retail: Math.round(pricing.RQ * 100) / 100,
+      };
+
+      const original = itemData.pricing || {};
+      const mismatch =
+        original.base !== recalculated.base ||
+        original.franchise !== recalculated.franchise ||
+        original.retail !== recalculated.retail;
+
+      if (mismatch) {
+        console.log(`🔁 MISMATCH found. Updating ${doc.id}`);
+        await db
+          .collection('ITEMS')
+          .doc(doc.id)
+          .update({ pricing: recalculated });
+      } else {
+        console.log(`✅ Prices match for ${doc.id}`);
+      }
+
+      updatedItems.push({
+        id: doc.id,
+        category: itemData.category,
+        subcategory: itemData.subcategory,
+        pricing: recalculated,
+        wasUpdated: mismatch,
+      });
     }
 
     return res.status(200).json({
       success: true,
-      message: 'Prices updated and items recalculated successfully',
-      updatedItemsByCategory,
+      message: `Checked ${updatedItems.length} items. Updated mismatches automatically.`,
+      items: updatedItems,
     });
   } catch (error) {
-    console.error('Error in updatePrices:', error);
+    console.error('Error verifying PRICES:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error while updating prices and items',
+      message: 'Internal server error during verification',
+      error: error.message,
+    });
+  }
+});
+
+app.post('/updatePrices', async (req, res) => {
+  try {
+    const updatedPrices = req.body.PRICES;
+
+    if (!Array.isArray(updatedPrices) || updatedPrices.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or empty PRICES array in request body',
+      });
+    }
+
+    const batch = db.batch();
+
+    updatedPrices.forEach((priceDoc) => {
+      const { docname, ...fields } = priceDoc;
+      if (!docname) return;
+
+      const docRef = db.collection('PRICES').doc(docname);
+      batch.set(docRef, fields); // overwrite the document completely
+    });
+
+    await batch.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: `${updatedPrices.length} PRICES updated successfully`,
+    });
+  } catch (error) {
+    console.error('Error updating PRICES:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while updating PRICES',
+    });
+  }
+});
+
+// app.post('/addItem', async (req, res) => {
+//   try {
+//     const { category, subcategory, grossWeight, materialsUsed } = req.body;
+
+//     // Input validation
+//     if (!category || typeof category !== 'string') {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: 'Valid category is required' });
+//     }
+
+//     if (!subcategory || typeof subcategory !== 'string') {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: 'Valid subcategory is required' });
+//     }
+
+//     if (isNaN(grossWeight) || grossWeight <= 0) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: 'Valid grossWeight is required' });
+//     }
+
+//     if (!Array.isArray(materialsUsed) || materialsUsed.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'materialsUsed must be a non-empty array',
+//       });
+//     }
+
+//     // Generate product ID
+//     const itemsSnapshot = await db.collection('ITEMS').get();
+//     const maxId = itemsSnapshot.docs.reduce((max, doc) => {
+//       const num = parseInt(doc.id.replace('APJ', ''), 10);
+//       return num > max ? num : max;
+//     }, 0);
+//     const newID = `APJ${String(maxId + 1).padStart(3, '0')}`;
+
+//     // Fetch PRICES
+//     const priceSnapshot = await db.collection('PRICES').get();
+//     const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
+//       acc[doc.id] = doc.data();
+//       return acc;
+//     }, {});
+
+//     const pricing = {
+//       base: 0,
+//       FRQ: 0,
+//       RQ: 0,
+//     };
+
+//     for (const materialGroup of materialsUsed) {
+//       const docname = materialGroup.docname;
+//       if (!docname || typeof docname !== 'string') {
+//         console.warn('Skipping material group with invalid docname');
+//         continue;
+//       }
+
+//       const priceGroup = priceMap[docname];
+//       if (!priceGroup) {
+//         console.warn(`Price group not found for docname: ${docname}`);
+//         continue;
+//       }
+
+//       for (const [materialType, quantity] of Object.entries(materialGroup)) {
+//         if (materialType === 'docname') continue;
+//         if (isNaN(quantity)) {
+//           console.warn(`Invalid quantity for ${materialType}`);
+//           continue;
+//         }
+
+//         const priceArray = priceGroup[materialType];
+//         if (!Array.isArray(priceArray) || priceArray.length !== 3) {
+//           console.warn(
+//             `Price array not found or invalid for ${materialType} in ${docname}`
+//           );
+//           continue;
+//         }
+
+//         // Base prices per tier
+//         const basePrice = priceArray[0] * quantity;
+//         const frqPrice = priceArray[1] * quantity;
+//         const rqPrice = priceArray[2] * quantity;
+
+//         pricing.base += basePrice;
+//         pricing.FRQ += frqPrice;
+//         pricing.RQ += rqPrice;
+
+//         // Making charges
+//         const makingArray = priceGroup.MAKING || priceGroup.MAKINGCHARGES;
+//         let makingBase = 0,
+//           makingFRQ = 0,
+//           makingRQ = 0;
+
+//         if (Array.isArray(makingArray) && makingArray.length === 3) {
+//           makingBase = makingArray[0] * quantity;
+//           makingFRQ = makingArray[1] * quantity;
+//           makingRQ = makingArray[2] * quantity;
+
+//           pricing.base += makingBase;
+//           pricing.FRQ += makingFRQ;
+//           pricing.RQ += makingRQ;
+//         }
+
+//         // Wastage
+//         const wastageArray = priceGroup.WASTAGE;
+//         if (Array.isArray(wastageArray) && wastageArray.length === 3) {
+//           pricing.base += (basePrice + makingBase) * (wastageArray[0] / 100);
+//           pricing.FRQ += (frqPrice + makingFRQ) * (wastageArray[1] / 100);
+//           pricing.RQ += (rqPrice + makingRQ) * (wastageArray[2] / 100);
+//         }
+//       }
+//     }
+
+//     // Round totals
+//     const totalPrice = Math.round(pricing.base * 100) / 100;
+//     const franchisePrice = Math.round(pricing.FRQ * 100) / 100;
+//     const retailPrice = Math.round(pricing.RQ * 100) / 100;
+
+//     // Create new item
+//     const newItem = {
+//       category: category.toUpperCase(),
+//       subcategory: subcategory.toUpperCase(),
+//       grossWeight: parseFloat(grossWeight),
+//       materialsUsed,
+//       pricing: {
+//         base: totalPrice,
+//         franchise: franchisePrice,
+//         retail: retailPrice,
+//       },
+//     };
+
+//     await db.collection('ITEMS').doc(newID).set(newItem);
+
+//     return res.status(201).json({
+//       success: true,
+//       message: 'Jewelry item successfully added',
+//       data: {
+//         productId: newID,
+//         category: newItem.category,
+//         subcategory: newItem.subcategory,
+//         grossWeight: newItem.grossWeight,
+//         pricing: newItem.pricing,
+//         materialsCount: materialsUsed.length,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('Error in /addItem:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error',
+//       error: error.message,
+//     });
+//   }
+// });
+
+app.post('/addItem', async (req, res) => {
+  try {
+    const { category, subcategory, grossWeight, materialsUsed } = req.body;
+
+    // Input validation
+    if (!category || typeof category !== 'string') {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Valid category is required' });
+    }
+
+    if (!subcategory || typeof subcategory !== 'string') {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Valid subcategory is required' });
+    }
+
+    if (isNaN(grossWeight) || grossWeight <= 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Valid grossWeight is required' });
+    }
+
+    if (!Array.isArray(materialsUsed) || materialsUsed.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'materialsUsed must be a non-empty array',
+      });
+    }
+
+    const itemsSnapshot = await db.collection('ITEMS').get();
+    const maxId = itemsSnapshot.docs.reduce((max, doc) => {
+      const num = parseInt(doc.id.replace('APJ', ''), 10);
+      return num > max ? num : max;
+    }, 0);
+    const newID = `APJ${String(maxId + 1).padStart(3, '0')}`;
+
+    const priceSnapshot = await db.collection('PRICES').get();
+    const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
+      acc[doc.id] = doc.data();
+      return acc;
+    }, {});
+
+    const pricing = {
+      base: 0,
+      FRQ: 0,
+      RQ: 0,
+    };
+
+    console.log(`\n--- Starting Price Calculation for Item ${newID} ---\n`);
+
+    for (const materialGroup of materialsUsed) {
+      const docname = materialGroup.docname;
+      if (!docname || typeof docname !== 'string') {
+        console.warn('Skipping material group with invalid docname');
+        continue;
+      }
+
+      const priceGroup = priceMap[docname];
+      if (!priceGroup) {
+        console.warn(`Price group not found for docname: ${docname}`);
+        continue;
+      }
+
+      console.log(`\n▶ Material Group: ${docname}`);
+
+      for (const [materialType, quantity] of Object.entries(materialGroup)) {
+        if (materialType === 'docname') continue;
+        if (isNaN(quantity)) {
+          console.warn(`Invalid quantity for ${materialType}`);
+          continue;
+        }
+
+        const priceArray = priceGroup[materialType];
+        if (!Array.isArray(priceArray) || priceArray.length !== 3) {
+          console.warn(
+            `Price array not found or invalid for ${materialType} in ${docname}`
+          );
+          continue;
+        }
+
+        const basePrice = priceArray[0] * quantity;
+        const frqPrice = priceArray[1] * quantity;
+        const rqPrice = priceArray[2] * quantity;
+
+        console.log(`  ➤ Material: ${materialType}`);
+        console.log(`    Quantity: ${quantity}`);
+        console.log(
+          `    Prices: Base=${priceArray[0]}, FRQ=${priceArray[1]}, RQ=${priceArray[2]}`
+        );
+        console.log(`    → Base Price: ${basePrice}`);
+        console.log(`    → FRQ Price:  ${frqPrice}`);
+        console.log(`    → RQ Price:   ${rqPrice}`);
+
+        pricing.base += basePrice;
+        pricing.FRQ += frqPrice;
+        pricing.RQ += rqPrice;
+
+        // Making Charges
+        const makingArray = priceGroup.MAKING || priceGroup.MAKINGCHARGES;
+        let makingBase = 0,
+          makingFRQ = 0,
+          makingRQ = 0;
+
+        if (Array.isArray(makingArray) && makingArray.length === 3) {
+          makingBase = makingArray[0] * quantity;
+          makingFRQ = makingArray[1] * quantity;
+          makingRQ = makingArray[2] * quantity;
+
+          console.log(
+            `    Making Charges per unit: Base=${makingArray[0]}, FRQ=${makingArray[1]}, RQ=${makingArray[2]}`
+          );
+          console.log(
+            `    → Making: Base=${makingBase}, FRQ=${makingFRQ}, RQ=${makingRQ}`
+          );
+
+          pricing.base += makingBase;
+          pricing.FRQ += makingFRQ;
+          pricing.RQ += makingRQ;
+        }
+
+        // Wastage
+        const wastageArray = priceGroup.WASTAGE;
+        if (Array.isArray(wastageArray) && wastageArray.length === 3) {
+          const wasteBase = (basePrice + makingBase) * (wastageArray[0] / 100);
+          const wasteFRQ = (frqPrice + makingFRQ) * (wastageArray[1] / 100);
+          const wasteRQ = (rqPrice + makingRQ) * (wastageArray[2] / 100);
+
+          console.log(
+            `    Wastage %: Base=${wastageArray[0]}%, FRQ=${wastageArray[1]}%, RQ=${wastageArray[2]}%`
+          );
+          console.log(
+            `    → Wastage: Base=${wasteBase.toFixed(
+              2
+            )}, FRQ=${wasteFRQ.toFixed(2)}, RQ=${wasteRQ.toFixed(2)}`
+          );
+
+          pricing.base += wasteBase;
+          pricing.FRQ += wasteFRQ;
+          pricing.RQ += wasteRQ;
+        }
+      }
+    }
+
+    // Final Total Prices
+    const totalPrice = Math.round(pricing.base * 100) / 100;
+    const franchisePrice = Math.round(pricing.FRQ * 100) / 100;
+    const retailPrice = Math.round(pricing.RQ * 100) / 100;
+
+    console.log(`\n--- Final Price Summary ---`);
+    console.log(`Total Base Price: ₹${totalPrice}`);
+    console.log(`Franchise Price:  ₹${franchisePrice}`);
+    console.log(`Retail Price:     ₹${retailPrice}`);
+    console.log(`---------------------------\n`);
+
+    const newItem = {
+      category: category.toUpperCase(),
+      subcategory: subcategory.toUpperCase(),
+      grossWeight: parseFloat(grossWeight),
+      materialsUsed,
+      pricing: {
+        base: totalPrice,
+        franchise: franchisePrice,
+        retail: retailPrice,
+      },
+    };
+
+    await db.collection('ITEMS').doc(newID).set(newItem);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Jewelry item successfully added',
+      data: {
+        productId: newID,
+        category: newItem.category,
+        subcategory: newItem.subcategory,
+        grossWeight: newItem.grossWeight,
+        pricing: newItem.pricing,
+        materialsCount: materialsUsed.length,
+      },
+    });
+  } catch (error) {
+    console.error('Error in /addItem:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+});
+
+app.get('/deleteItem/productId=:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    if (!productId || typeof productId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid productId is required',
+      });
+    }
+
+    const itemRef = db.collection('ITEMS').doc(productId);
+    const doc = await itemRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: `Item with productId ${productId} does not exist`,
+      });
+    }
+
+    await itemRef.delete();
+
+    return res.status(200).json({
+      success: true,
+      message: `Item ${productId} successfully deleted`,
+    });
+  } catch (error) {
+    console.error('Error in /deleteItem:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
     });
   }
 });

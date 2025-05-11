@@ -279,3 +279,314 @@
 //       });
 //     }
 //   });
+
+// app.post('/updatePrices', async (req, res) => {
+//   try {
+//     const updatedPrices = req.body.PRICES;
+
+//     // Basic validation
+//     if (!Array.isArray(updatedPrices) || updatedPrices.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid or empty PRICES array in request body',
+//       });
+//     }
+
+//     const batch = db.batch();
+
+//     for (const priceDoc of updatedPrices) {
+//       const { docname, ...fieldsToUpdate } = priceDoc;
+
+//       if (!docname || typeof docname !== 'string') {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Each price document must include a valid "docname".',
+//         });
+//       }
+
+//       const docRef = db.collection('PRICES').doc(docname);
+
+//       // Apply partial update (merge: true)
+//       batch.set(docRef, fieldsToUpdate, { merge: true });
+//     }
+
+//     await batch.commit();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `${updatedPrices.length} PRICES documents updated partially`,
+//     });
+//   } catch (error) {
+//     console.error('Error during partial update of PRICES:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error while partially updating PRICES',
+//     });
+//   }
+// });
+
+// {
+//   "success": true,
+//   "message": "5 PRICES retrieved",
+//   "PRICES": [
+//     {
+//       "docname": "DIAMONDS",
+//       "D1-VVS": [15000, 15000, 15000],
+//       "D2-VS": [14000, 14000, 14000],
+//       "D3-SI": [12000, 12000, 12000],
+//       "MAKING": [1000, 800, 600]
+//     },
+//     {
+//       "docname": "GOLD",
+//       "WASTAGE": [18, 15, 12],
+//       "MAKINGCHARGES": [500, 400, 300],
+//       "16k": [4500, 4500, 4500],
+//       "22k": [6500, 6500, 6500],
+//       "18k": [5000, 5000, 5000]
+//     },
+//     {
+//       "docname": "PEARLS",
+//       "CORAL": [150, 150, 150]
+//     },
+//     {
+//       "docname": "POLKI",
+//       "FLATPOLKI": [15000, 14000, 13000],
+//       "FLATPOLKIBIG": [20000, 19000, 18000],
+//       "MAKING": [1500, 1400, 1300]
+//     },
+//     {
+//       "docname": "STONES",
+//       "Pe/mq (+10)": [120, 120, 120]
+//     }
+//   ]
+// }
+
+// app.post('/addItem', async (req, res) => {
+//   try {
+//     const { category, subcategory, grossWeight, materialsUsed } = req.body;
+
+//     if (
+//       !category ||
+//       !subcategory ||
+//       !grossWeight ||
+//       !Array.isArray(materialsUsed)
+//     ) {
+//       return res
+//         .status(400)
+//         .json({ success: false, message: 'Missing or invalid fields.' });
+//     }
+
+//     // Generate unique product ID
+//     const snapshot = await db.collection('ITEMS').get();
+//     const existingIDs = snapshot.docs.map((doc) => doc.id);
+//     const nextIDNumber =
+//       existingIDs
+//         .map((id) => parseInt(id.replace('APJ', ''), 10))
+//         .filter((n) => !isNaN(n))
+//         .sort((a, b) => b - a)[0] || 0;
+//     const newID = `APJ${String(nextIDNumber + 1).padStart(3, '0')}`;
+
+//     // Fetch latest prices
+//     const priceSnapshot = await db.collection('PRICES').get();
+//     const priceMap = {};
+//     priceSnapshot.docs.forEach((doc) => {
+//       priceMap[doc.id] = doc.data();
+//     });
+
+//     // Calculate total price for 3 tiers
+//     let totalPrice = 0;
+//     let FRQ = 0;
+//     let RQ = 0;
+
+//     for (const materialGroup of materialsUsed) {
+//       const { docname, ...entries } = materialGroup;
+//       const priceGroup = priceMap[docname];
+//       if (!priceGroup) continue;
+
+//       for (const [key, qty] of Object.entries(entries)) {
+//         const priceArr = priceGroup[key];
+//         if (!Array.isArray(priceArr) || priceArr.length !== 3) continue;
+
+//         // Base price calculation (qty * price for the material)
+//         totalPrice += qty * priceArr[0];
+//         FRQ += qty * priceArr[1];
+//         RQ += qty * priceArr[2];
+
+//         // Add making charges if available
+//         if (priceGroup['MAKING'] && Array.isArray(priceGroup['MAKING'])) {
+//           // Three making charge values for each price tier
+//           const makingChargeBase = priceGroup['MAKING'][0]; // Base price making charge
+//           const makingChargeFRQ = priceGroup['MAKING'][1]; // FRQ price making charge
+//           const makingChargeRQ = priceGroup['MAKING'][2]; // RQ price making charge
+
+//           totalPrice += qty * makingChargeBase;
+//           FRQ += qty * makingChargeFRQ;
+//           RQ += qty * makingChargeRQ;
+//         }
+
+//         // Add wastage if available
+//         if (priceGroup['WASTAGE'] && Array.isArray(priceGroup['WASTAGE'])) {
+//           // Three wastage percentage values for each price tier
+//           const wastageBase = priceGroup['WASTAGE'][0]; // Base price wastage percentage
+//           const wastageFRQ = priceGroup['WASTAGE'][1]; // FRQ price wastage percentage
+//           const wastageRQ = priceGroup['WASTAGE'][2]; // RQ price wastage percentage
+
+//           // Calculate wastage quantity based on percentage
+//           const wastageQtyBase = (qty * wastageBase) / 100;
+//           const wastageQtyFRQ = (qty * wastageFRQ) / 100;
+//           const wastageQtyRQ = (qty * wastageRQ) / 100;
+
+//           totalPrice += wastageQtyBase * priceArr[0];
+//           FRQ += wastageQtyFRQ * priceArr[1];
+//           RQ += wastageQtyRQ * priceArr[2];
+//         }
+//       }
+//     }
+
+//     const newItem = {
+//       category,
+//       subcategory,
+//       grossWeight,
+//       materialsUsed,
+//       totalPrice,
+//       FRQ,
+//       RQ,
+//       createdAt: new Date().toISOString(),
+//     };
+
+//     await db.collection('ITEMS').doc(newID).set(newItem);
+
+//     return res.status(201).json({
+//       success: true,
+//       message: 'Item added successfully.',
+//       productId: newID,
+//       totalPrice,
+//       FRQ,
+//       RQ,
+//     });
+//   } catch (error) {
+//     console.error('Error adding item:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error while adding item.',
+//     });
+//   }
+// });
+
+// app.post('/addItem', async (req, res) => {
+//   try {
+//     const { category, subcategory, grossWeight, materialsUsed } = req.body;
+
+//     // Validation
+//     if (
+//       !category ||
+//       !subcategory ||
+//       !grossWeight ||
+//       !Array.isArray(materialsUsed)
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           'Missing required fields: category, subcategory, grossWeight, or materialsUsed',
+//       });
+//     }
+
+//     // Generate ID using counter document
+//     const counterRef = db.collection('COUNTERS').doc('items');
+//     const { counter } = await db.runTransaction(async (transaction) => {
+//       const doc = await transaction.get(counterRef);
+//       const currentCount = doc.exists ? doc.data().count || 0 : 0;
+//       transaction.set(counterRef, { count: currentCount + 1 }, { merge: true });
+//       return { counter: currentCount + 1 };
+//     });
+//     const newID = `APJ${String(counter).padStart(3, '0')}`;
+
+//     // Fetch prices
+//     const priceSnapshot = await db.collection('PRICES').get();
+//     const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
+//       acc[doc.id] = doc.data();
+//       return acc;
+//     }, {});
+
+//     // Price calculation
+//     let [totalPrice, FRQ, RQ] = [0, 0, 0];
+
+//     for (const materialGroup of materialsUsed) {
+//       const { docname, ...entries } = materialGroup;
+//       const priceGroup = priceMap[docname] || {};
+
+//       // Get making charge key (handles both MAKING and MAKINGCHARGES)
+//       const makingKey = Object.keys(priceGroup).find(
+//         (k) => k === 'MAKING' || k === 'MAKINGCHARGES'
+//       );
+//       const makingCharges = makingKey ? priceGroup[makingKey] : null;
+
+//       // Validate making charges format
+//       if (
+//         makingCharges &&
+//         (!Array.isArray(makingCharges) || makingCharges.length !== 3)
+//       ) {
+//         console.warn(`Invalid making charges format for ${docname}`);
+//         makingCharges = null;
+//       }
+
+//       // Process material entries
+//       for (const [materialKey, qty] of Object.entries(entries)) {
+//         const prices = priceGroup[materialKey];
+//         if (!Array.isArray(prices) || prices.length !== 3) continue;
+
+//         // Base material pricing
+//         totalPrice += qty * prices[0];
+//         FRQ += qty * prices[1];
+//         RQ += qty * prices[2];
+
+//         // Apply making charges if available
+//         if (makingCharges) {
+//           totalPrice += qty * makingCharges[0];
+//           FRQ += qty * makingCharges[1];
+//           RQ += qty * makingCharges[2];
+//         }
+
+//         // Apply wastage if available
+//         if (priceGroup.WASTAGE) {
+//           const [wastageBase, wastageFRQ, wastageRQ] = priceGroup.WASTAGE;
+
+//           totalPrice += ((qty * wastageBase) / 100) * prices[0];
+//           FRQ += ((qty * wastageFRQ) / 100) * prices[1];
+//           RQ += ((qty * wastageRQ) / 100) * prices[2];
+//         }
+//       }
+//     }
+
+//     // Create new item
+//     const newItem = {
+//       category,
+//       subcategory,
+//       grossWeight: parseFloat(grossWeight),
+//       materialsUsed,
+//       pricing: {
+//         base: Math.round(totalPrice),
+//         FRQ: Math.round(FRQ),
+//         RQ: Math.round(RQ),
+//       },
+//       createdAt: new Date().toISOString(),
+//     };
+
+//     // Save to Firestore
+//     await db.collection('ITEMS').doc(newID).set(newItem);
+
+//     return res.status(201).json({
+//       success: true,
+//       message: 'Item added successfully',
+//       productId: newID,
+//       pricing: newItem.pricing,
+//     });
+//   } catch (error) {
+//     console.error('Error adding item:', error);
+//     return res.status(500).json({
+//       success: false,
+//       message: 'Internal server error',
+//       error: error.message,
+//     });
+//   }
+// });
