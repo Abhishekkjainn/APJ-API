@@ -330,6 +330,7 @@ app.get('/getAllItems', async (req, res) => {
         category: itemData.category,
         subcategory: itemData.subcategory,
         pricing: recalculated,
+        grossweight: itemData.grossWeight,
         materialsUsed: materialsUsed,
         wasUpdated: mismatch,
       });
