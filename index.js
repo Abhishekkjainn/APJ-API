@@ -351,6 +351,30 @@ app.get('/getAllItems', async (req, res) => {
   }
 });
 
+app.get('/getGoldRates', async (req, res) => {
+  try {
+    const goldDoc = await db.collection('PRICES').doc('GOLD').get();
+
+    if (!goldDoc.exists) {
+      return res.status(404).json({ error: 'Gold document not found' });
+    }
+
+    const data = goldDoc.data();
+    const result = {};
+
+    // Include only purity keys (like "14k", "18k", etc.)
+    for (const key in data) {
+      if (Array.isArray(data[key]) && key !== 'MAKING' && key !== 'WASTAGE') {
+        result[key] = Number(data[key][0]); // Get the first price, convert to number
+      }
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error fetching gold rates:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 app.post('/updatePrices', async (req, res) => {
   try {
     const updatedPrices = req.body.PRICES;
