@@ -747,3 +747,91 @@
 //     });
 //   }
 // });
+
+// import React, { useEffect, useState } from 'react';
+
+// export default function UpdatePrice() {
+//   const [prices, setPrices] = useState([]);
+//   const [loading, setLoading] = useState(true);
+
+//   useEffect(() => {
+//     fetch('https://apjapi.vercel.app/getAllPrices')
+//       .then((res) => res.json())
+//       .then((data) => {
+//         if (data.success) {
+//           setPrices(data.PRICES);
+//         }
+//       })
+//       .catch((err) => console.error('Error fetching prices:', err))
+//       .finally(() => setLoading(false));
+//   }, []);
+
+//   const handleInputChange = (categoryIndex, itemKey, tierIndex, value) => {
+//     const updatedPrices = [...prices];
+//     const oldValue = updatedPrices[categoryIndex][itemKey][tierIndex];
+//     updatedPrices[categoryIndex][itemKey][tierIndex] = value;
+//     setPrices(updatedPrices);
+
+//     console.log(`[Change Detected]`);
+//     console.log(
+//       `→ Category (docname): ${updatedPrices[categoryIndex].docname}`
+//     );
+//     console.log(`→ Item: ${itemKey}`);
+//     console.log(`→ Tier: ${tierIndex + 1}`);
+//     console.log(`→ Old Value: ${oldValue}`);
+//     console.log(`→ New Value: ${value}`);
+//     console.log('→ Full Updated Entry:', updatedPrices[categoryIndex][itemKey]);
+//     console.log('→ Full Category Object:', updatedPrices[categoryIndex]);
+//     console.log('Complete Object', updatedPrices);
+//     console.log('---------------------------');
+//   };
+
+//   return (
+//     <div className="updateprices-container">
+//       <div className="headingup">
+//         <h2 className="updateprices-heading">Update Prices</h2>
+//         <div className="savechanges">Save Changes</div>
+//       </div>
+//       {loading ? (
+//         <p className="updateprices-loading">Loading...</p>
+//       ) : (
+//         prices.map((category, categoryIndex) => (
+//           <div key={category.docname} className="updateprices-category">
+//             <div className="updateprices-category-header">
+//               <h3>{category.docname}</h3>
+//               <button className="updateprices-edit-button">Edit</button>
+//             </div>
+//             <div className="updateprices-items">
+//               {Object.entries(category).map(([itemKey, values]) => {
+//                 if (itemKey === 'docname') return null;
+//                 return (
+//                   <div key={itemKey} className="updateprices-item-row">
+//                     <label className="updateprices-item-label">{itemKey}</label>
+//                     <div className="updateprices-input-group">
+//                       {values.map((value, tierIndex) => (
+//                         <input
+//                           key={tierIndex}
+//                           type="number"
+//                           value={value}
+//                           onChange={(e) =>
+//                             handleInputChange(
+//                               categoryIndex,
+//                               itemKey,
+//                               tierIndex,
+//                               e.target.value
+//                             )
+//                           }
+//                           className="updateprices-input"
+//                         />
+//                       ))}
+//                     </div>
+//                   </div>
+//                 );
+//               })}
+//             </div>
+//           </div>
+//         ))
+//       )}
+//     </div>
+//   );
+// }
