@@ -1253,6 +1253,42 @@ app.get('/deleteItem/productId=:productId', async (req, res) => {
     });
   }
 });
+app.get('/deleteDraft/productId=:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    if (!productId || typeof productId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid productId is required',
+      });
+    }
+
+    const itemRef = db.collection('DRAFT').doc(productId);
+    const doc = await itemRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({
+        success: false,
+        message: `Item with productId ${productId} does not exist`,
+      });
+    }
+
+    await itemRef.delete();
+
+    return res.status(200).json({
+      success: true,
+      message: `Item ${productId} successfully deleted`,
+    });
+  } catch (error) {
+    console.error('Error in /deleteDraft:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+});
 
 app.listen(3000, () => {
   console.log('Server is running on port 3000');
