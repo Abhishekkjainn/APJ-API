@@ -1149,7 +1149,7 @@ app.get('/getAllDrafts', async (req, res) => {
 
       // Update Firebase if needed
       if (updated) {
-        await db.collection('DRAFTS').doc(item.id).update({
+        await db.collection('DRAFT').doc(item.id).update({
           tier1price: newTiers[0],
           tier2price: newTiers[1],
           tier3price: newTiers[2],
