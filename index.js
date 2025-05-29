@@ -664,6 +664,60 @@ app.post('/addItem', async (req, res) => {
     });
   }
 });
+app.post('/addeditedItem', async (req, res) => {
+  try {
+    const itemData = req.body;
+
+    // Validate required fields
+    const requiredFields = [
+      'productId',
+      'category',
+      'subcategory',
+      'goldpurity',
+      'netweight',
+      'grossWeight',
+      'tier1price',
+      'tier2price',
+      'tier3price',
+      'itemsUsed',
+      'gst',
+      'imagelink',
+    ];
+
+    for (const field of requiredFields) {
+      if (!itemData[field]) {
+        return res.status(400).json({
+          success: false,
+          message: `Missing required field: ${field}`,
+        });
+      }
+    }
+
+    const { productId } = itemData;
+
+    // Check if item with the same productId already exists
+    const itemRef = db.collection('ITEMS').doc(productId);
+    const existingDoc = await itemRef.get();
+
+    // Save the item to Firestore
+    await itemRef.set({
+      ...itemData,
+      createdAt: new Date().toISOString(), // Optional metadata
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Item ${productId} added successfully`,
+    });
+  } catch (error) {
+    console.error('Error in /addItem:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+});
 
 app.post('/addDraft', async (req, res) => {
   try {
