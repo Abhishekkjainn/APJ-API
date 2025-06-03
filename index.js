@@ -622,7 +622,6 @@ app.post('/addItem', async (req, res) => {
       'itemsUsed',
       'gst',
       'imagelink',
-      'making',
     ];
 
     for (const field of requiredFields) {
