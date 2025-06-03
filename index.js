@@ -1070,7 +1070,7 @@ app.get('/getAllDrafts', async (req, res) => {
       let totalStoneWeightGms = 0;
       let totalStonePrice = 0;
       let updated = false;
-      let makingTypeUsed = making;
+      makingTypeUsed = making;
 
       // Arrays to hold detailed charges per tier
       const goldCharges = [];
