@@ -5,6 +5,7 @@ const { db } = require('./firebase');
 const bodyParser = require('body-parser');
 
 app.use(bodyParser.json());
+
 app.use(cors({ origin: '*' }));
 
 app.get('/', (req, res) => {
@@ -621,6 +622,7 @@ app.post('/addItem', async (req, res) => {
       'itemsUsed',
       'gst',
       'imagelink',
+      'making',
     ];
 
     for (const field of requiredFields) {
@@ -664,6 +666,7 @@ app.post('/addItem', async (req, res) => {
     });
   }
 });
+
 app.post('/addeditedItem', async (req, res) => {
   try {
     const itemData = req.body;
@@ -807,6 +810,7 @@ app.get('/getAllItems', async (req, res) => {
         tier1price,
         tier2price,
         tier3price,
+        making,
       } = item;
 
       const netWeight = parseFloat(netweight);
@@ -820,7 +824,7 @@ app.get('/getAllItems', async (req, res) => {
       let totalStoneWeightGms = 0;
       let totalStonePrice = 0;
       let updated = false;
-      let makingTypeUsed = category === 'POLKI' ? 'MAKING/VICTORIAN' : 'MAKING';
+      let makingTypeUsed = making;
 
       // Arrays to hold detailed charges per tier
       const goldCharges = [];
@@ -913,7 +917,7 @@ app.get('/getAllItems', async (req, res) => {
 
             if (final === tiers[i]) {
               calculatedPrice = final;
-              makingTypeUsed = opt.type;
+              makingTypeUsed = making;
               makingCharges[i] = opt.value;
               matched = true;
               console.log(`✅ Tier ${i + 1} matches with ${opt.type}`);
@@ -1052,6 +1056,7 @@ app.get('/getAllDrafts', async (req, res) => {
         tier1price,
         tier2price,
         tier3price,
+        making,
       } = item;
 
       const netWeight = parseFloat(netweight);
@@ -1065,7 +1070,7 @@ app.get('/getAllDrafts', async (req, res) => {
       let totalStoneWeightGms = 0;
       let totalStonePrice = 0;
       let updated = false;
-      let makingTypeUsed = category === 'POLKI' ? 'MAKING/VICTORIAN' : 'MAKING';
+      let makingTypeUsed = making;
 
       // Arrays to hold detailed charges per tier
       const goldCharges = [];
@@ -1158,7 +1163,7 @@ app.get('/getAllDrafts', async (req, res) => {
 
             if (final === tiers[i]) {
               calculatedPrice = final;
-              makingTypeUsed = opt.type;
+              makingTypeUsed = making;
               makingCharges[i] = opt.value;
               matched = true;
               console.log(`✅ Tier ${i + 1} matches with ${opt.type}`);
