@@ -855,7 +855,7 @@ app.get('/getAllItems', async (req, res) => {
         console.log(`Wastage (${wastagePercent}%) = ${wastage.toFixed(1)}`);
 
         // 3. Making Charges
-        let making = 0;
+        let makingc = 0;
         let makingOptions = [];
 
         if (category === 'POLKI') {
@@ -867,12 +867,12 @@ app.get('/getAllItems', async (req, res) => {
           ];
           // We'll pick the matching one below
         } else {
-          making = netWeight * parseFloat(prices[category]?.MAKING?.[i] || 0);
-          makingCharges[i] = making;
+          makingc = netWeight * parseFloat(prices[category]?.MAKING?.[i] || 0);
+          makingCharges[i] = makingc;
           console.log(
-            `Making (${prices[category]?.MAKING?.[i]} per g) = ${making.toFixed(
-              1
-            )}`
+            `Making (${
+              prices[category]?.MAKING?.[i]
+            } per g) = ${makingc.toFixed(1)}`
           );
         }
 
@@ -940,7 +940,7 @@ app.get('/getAllItems', async (req, res) => {
             );
           }
         } else {
-          const subtotal = goldBase + wastage + making + materialTotal;
+          const subtotal = goldBase + wastage + makingc + materialTotal;
           calculatedPrice = parseFloat(
             (subtotal * (1 + gstPercent / 100)).toFixed(1)
           );
