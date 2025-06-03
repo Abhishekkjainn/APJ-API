@@ -102,6 +102,51 @@ app.get(
   }
 );
 
+app.get(
+  '/addEditedUser/username=:username/password=:password/admin=:admin',
+  async (req, res) => {
+    const { username, password, admin } = req.params;
+
+    // if (!username || !password || typeof admin === 'undefined') {
+    //   return res.status(400).json({
+    //     success: false,
+    //     message: 'Missing required fields: username, password, or admin',
+    //   });
+    // }
+
+    const isAdmin = admin === 'true';
+
+    try {
+      const userRef = db.collection('USERS').doc(username);
+      const userDoc = await userRef.get();
+
+      if (userDoc.exists) {
+        return res.status(409).json({
+          success: false,
+          message: `User '${username}' already exists`,
+        });
+      }
+
+      await userRef.set({
+        USERNAME: username,
+        PASSWORD: password,
+        ADMIN: isAdmin,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: `User '${username}' Edited successfully`,
+      });
+    } catch (error) {
+      console.error(`Error adding user '${username}':`, error);
+      return res.status(500).json({
+        success: false,
+        message: 'Internal server error while adding user',
+      });
+    }
+  }
+);
+
 // EDIT ADMIN ACCESS
 app.get(
   '/editAdminAccess/username=:username/admin=:admin',
