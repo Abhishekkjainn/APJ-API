@@ -107,25 +107,18 @@ app.get(
   async (req, res) => {
     const { username, password, admin } = req.params;
 
-    // if (!username || !password || typeof admin === 'undefined') {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: 'Missing required fields: username, password, or admin',
-    //   });
-    // }
-
     const isAdmin = admin === 'true';
 
     try {
       const userRef = db.collection('USERS').doc(username);
       const userDoc = await userRef.get();
 
-      if (userDoc.exists) {
-        return res.status(409).json({
-          success: false,
-          message: `User '${username}' already exists`,
-        });
-      }
+      // if (userDoc.exists) {
+      //   return res.status(409).json({
+      //     success: false,
+      //     message: `User '${username}' already exists`,
+      //   });
+      // }
 
       await userRef.set({
         USERNAME: username,
@@ -1023,6 +1016,7 @@ app.get('/getAllItems', async (req, res) => {
         tier2price: newTiers[1],
         tier3price: newTiers[2],
         makingTypeUsed,
+        making,
         totalStoneWeightCts: parseFloat(totalStoneWeightCts.toFixed(2)),
         totalStoneWeightGms: parseFloat(totalStoneWeightGms.toFixed(2)),
         totalStonePrice: parseFloat(totalStonePrice.toFixed(1)),
@@ -1211,6 +1205,14 @@ app.get('/getAllDrafts', async (req, res) => {
               makingCharges[i] = opt.value;
               matched = true;
               console.log(`✅ Tier ${i + 1} matches with ${opt.type}`);
+              // ✅ Set making = 1 for VICTORIAN, 0 for others
+              if (opt.type === 'VICTORIAN') {
+                item.making = 1;
+              } else {
+                item.making = 0;
+              }
+
+              console.log(`✅ Tier ${i + 1} matches with ${opt.type}`);
               break;
             }
           }
@@ -1269,6 +1271,7 @@ app.get('/getAllDrafts', async (req, res) => {
         tier2price: newTiers[1],
         tier3price: newTiers[2],
         makingTypeUsed,
+        making,
         totalStoneWeightCts: parseFloat(totalStoneWeightCts.toFixed(2)),
         totalStoneWeightGms: parseFloat(totalStoneWeightGms.toFixed(2)),
         totalStonePrice: parseFloat(totalStonePrice.toFixed(1)),
