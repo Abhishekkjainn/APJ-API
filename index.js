@@ -266,130 +266,6 @@ app.get('/getAllPrices', async (req, res) => {
   }
 });
 
-// app.get('/getAllItems', async (req, res) => {
-//   try {
-//     const [itemsSnapshot, priceSnapshot] = await Promise.all([
-//       db.collection('ITEMS').get(),
-//       db.collection('PRICES').get(),
-//     ]);
-
-//     const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
-//       acc[doc.id] = doc.data();
-//       return acc;
-//     }, {});
-
-//     const updatedItems = [];
-
-//     for (const doc of itemsSnapshot.docs) {
-//       const itemData = doc.data();
-//       const { materialsUsed } = itemData;
-//       const pricing = { base: 0, FRQ: 0, RQ: 0 };
-
-//       console.log(`\n--- Checking Item ${doc.id} ---\n`);
-
-//       for (const materialGroup of materialsUsed) {
-//         const docname = materialGroup.docname;
-//         if (!docname || typeof docname !== 'string') continue;
-
-//         const priceGroup = priceMap[docname];
-//         if (!priceGroup) {
-//           console.warn(`⚠ No price group found for ${docname}`);
-//           continue;
-//         }
-
-//         console.log(`▶ Material Group: ${docname}`);
-
-//         for (const [materialType, quantity] of Object.entries(materialGroup)) {
-//           if (materialType === 'docname' || isNaN(quantity)) continue;
-
-//           const priceArray = priceGroup[materialType];
-//           if (!Array.isArray(priceArray) || priceArray.length !== 3) {
-//             console.warn(
-//               `⚠ Invalid price array for ${materialType} in ${docname}`
-//             );
-//             continue;
-//           }
-
-//           const basePrice = priceArray[0] * quantity;
-//           const frqPrice = priceArray[1] * quantity;
-//           const rqPrice = priceArray[2] * quantity;
-
-//           pricing.base += basePrice;
-//           pricing.FRQ += frqPrice;
-//           pricing.RQ += rqPrice;
-
-//           const makingArray = priceGroup.MAKING || priceGroup.MAKINGCHARGES;
-//           let makingBase = 0,
-//             makingFRQ = 0,
-//             makingRQ = 0;
-
-//           if (Array.isArray(makingArray) && makingArray.length === 3) {
-//             makingBase = makingArray[0] * quantity;
-//             makingFRQ = makingArray[1] * quantity;
-//             makingRQ = makingArray[2] * quantity;
-
-//             pricing.base += makingBase;
-//             pricing.FRQ += makingFRQ;
-//             pricing.RQ += makingRQ;
-//           }
-
-//           const wastageArray = priceGroup.WASTAGE;
-//           if (Array.isArray(wastageArray) && wastageArray.length === 3) {
-//             pricing.base += (basePrice + makingBase) * (wastageArray[0] / 100);
-//             pricing.FRQ += (frqPrice + makingFRQ) * (wastageArray[1] / 100);
-//             pricing.RQ += (rqPrice + makingRQ) * (wastageArray[2] / 100);
-//           }
-//         }
-//       }
-
-//       const recalculated = {
-//         base: Math.round(pricing.base * 100) / 100,
-//         franchise: Math.round(pricing.FRQ * 100) / 100,
-//         retail: Math.round(pricing.RQ * 100) / 100,
-//       };
-
-//       const original = itemData.pricing || {};
-//       const mismatch =
-//         original.base !== recalculated.base ||
-//         original.franchise !== recalculated.franchise ||
-//         original.retail !== recalculated.retail;
-
-//       if (mismatch) {
-//         console.log(`🔁 MISMATCH found. Updating ${doc.id}`);
-//         await db
-//           .collection('ITEMS')
-//           .doc(doc.id)
-//           .update({ pricing: recalculated });
-//       } else {
-//         console.log(`✅ Prices match for ${doc.id}`);
-//       }
-
-//       updatedItems.push({
-//         id: doc.id,
-//         category: itemData.category,
-//         subcategory: itemData.subcategory,
-//         pricing: recalculated,
-//         grossweight: itemData.grossWeight,
-//         materialsUsed: materialsUsed,
-//         wasUpdated: mismatch,
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: `Checked ${updatedItems.length} items. Updated mismatches automatically.`,
-//       items: updatedItems,
-//     });
-//   } catch (error) {
-//     console.error('Error verifying PRICES:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal server error during verification',
-//       error: error.message,
-//     });
-//   }
-// });
-
 app.get('/getGoldRates', async (req, res) => {
   try {
     const goldDoc = await db.collection('PRICES').doc('GOLD').get();
@@ -451,197 +327,6 @@ app.post('/updatePrices', async (req, res) => {
   }
 });
 
-// app.post('/addItem', async (req, res) => {
-//   try {
-//     const { category, subcategory, grossWeight, materialsUsed } = req.body;
-
-//     // Input validation
-//     if (!category || typeof category !== 'string') {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: 'Valid category is required' });
-//     }
-
-//     if (!subcategory || typeof subcategory !== 'string') {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: 'Valid subcategory is required' });
-//     }
-
-//     if (isNaN(grossWeight) || grossWeight <= 0) {
-//       return res
-//         .status(400)
-//         .json({ success: false, message: 'Valid grossWeight is required' });
-//     }
-
-//     if (!Array.isArray(materialsUsed) || materialsUsed.length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: 'materialsUsed must be a non-empty array',
-//       });
-//     }
-
-//     const itemsSnapshot = await db.collection('ITEMS').get();
-//     const maxId = itemsSnapshot.docs.reduce((max, doc) => {
-//       const num = parseInt(doc.id.replace('APJ', ''), 10);
-//       return num > max ? num : max;
-//     }, 0);
-//     const newID = `APJ${String(maxId + 1).padStart(3, '0')}`;
-
-//     const priceSnapshot = await db.collection('PRICES').get();
-//     const priceMap = priceSnapshot.docs.reduce((acc, doc) => {
-//       acc[doc.id] = doc.data();
-//       return acc;
-//     }, {});
-
-//     const pricing = {
-//       base: 0,
-//       FRQ: 0,
-//       RQ: 0,
-//     };
-
-//     console.log(`\n--- Starting Price Calculation for Item ${newID} ---\n`);
-
-//     for (const materialGroup of materialsUsed) {
-//       const docname = materialGroup.docname;
-//       if (!docname || typeof docname !== 'string') {
-//         console.warn('Skipping material group with invalid docname');
-//         continue;
-//       }
-
-//       const priceGroup = priceMap[docname];
-//       if (!priceGroup) {
-//         console.warn(`Price group not found for docname: ${docname}`);
-//         continue;
-//       }
-
-//       console.log(`\n▶ Material Group: ${docname}`);
-
-//       for (const [materialType, quantity] of Object.entries(materialGroup)) {
-//         if (materialType === 'docname') continue;
-//         if (isNaN(quantity)) {
-//           console.warn(`Invalid quantity for ${materialType}`);
-//           continue;
-//         }
-
-//         const priceArray = priceGroup[materialType];
-//         if (!Array.isArray(priceArray) || priceArray.length !== 3) {
-//           console.warn(
-//             `Price array not found or invalid for ${materialType} in ${docname}`
-//           );
-//           continue;
-//         }
-
-//         const basePrice = priceArray[0] * quantity;
-//         const frqPrice = priceArray[1] * quantity;
-//         const rqPrice = priceArray[2] * quantity;
-
-//         console.log(`  ➤ Material: ${materialType}`);
-//         console.log(`    Quantity: ${quantity}`);
-//         console.log(
-//           `    Prices: Base=${priceArray[0]}, FRQ=${priceArray[1]}, RQ=${priceArray[2]}`
-//         );
-//         console.log(`    → Base Price: ${basePrice}`);
-//         console.log(`    → FRQ Price:  ${frqPrice}`);
-//         console.log(`    → RQ Price:   ${rqPrice}`);
-
-//         pricing.base += basePrice;
-//         pricing.FRQ += frqPrice;
-//         pricing.RQ += rqPrice;
-
-//         // Making Charges
-//         const makingArray = priceGroup.MAKING || priceGroup.MAKINGCHARGES;
-//         let makingBase = 0,
-//           makingFRQ = 0,
-//           makingRQ = 0;
-
-//         if (Array.isArray(makingArray) && makingArray.length === 3) {
-//           makingBase = makingArray[0] * quantity;
-//           makingFRQ = makingArray[1] * quantity;
-//           makingRQ = makingArray[2] * quantity;
-
-//           console.log(
-//             `    Making Charges per unit: Base=${makingArray[0]}, FRQ=${makingArray[1]}, RQ=${makingArray[2]}`
-//           );
-//           console.log(
-//             `    → Making: Base=${makingBase}, FRQ=${makingFRQ}, RQ=${makingRQ}`
-//           );
-
-//           pricing.base += makingBase;
-//           pricing.FRQ += makingFRQ;
-//           pricing.RQ += makingRQ;
-//         }
-
-//         // Wastage
-//         const wastageArray = priceGroup.WASTAGE;
-//         if (Array.isArray(wastageArray) && wastageArray.length === 3) {
-//           const wasteBase = (basePrice + makingBase) * (wastageArray[0] / 100);
-//           const wasteFRQ = (frqPrice + makingFRQ) * (wastageArray[1] / 100);
-//           const wasteRQ = (rqPrice + makingRQ) * (wastageArray[2] / 100);
-
-//           console.log(
-//             `    Wastage %: Base=${wastageArray[0]}%, FRQ=${wastageArray[1]}%, RQ=${wastageArray[2]}%`
-//           );
-//           console.log(
-//             `    → Wastage: Base=${wasteBase.toFixed(
-//               2
-//             )}, FRQ=${wasteFRQ.toFixed(2)}, RQ=${wasteRQ.toFixed(2)}`
-//           );
-
-//           pricing.base += wasteBase;
-//           pricing.FRQ += wasteFRQ;
-//           pricing.RQ += wasteRQ;
-//         }
-//       }
-//     }
-
-//     // Final Total Prices
-//     const totalPrice = Math.round(pricing.base * 100) / 100;
-//     const franchisePrice = Math.round(pricing.FRQ * 100) / 100;
-//     const retailPrice = Math.round(pricing.RQ * 100) / 100;
-
-//     console.log(`\n--- Final Price Summary ---`);
-//     console.log(`Total Base Price: ₹${totalPrice}`);
-//     console.log(`Franchise Price:  ₹${franchisePrice}`);
-//     console.log(`Retail Price:     ₹${retailPrice}`);
-//     console.log(`---------------------------\n`);
-
-//     const newItem = {
-//       category: category.toUpperCase(),
-//       subcategory: subcategory.toUpperCase(),
-//       grossWeight: parseFloat(grossWeight),
-//       materialsUsed,
-//       pricing: {
-//         base: totalPrice,
-//         franchise: franchisePrice,
-//         retail: retailPrice,
-//       },
-//     };
-
-//     await db.collection('ITEMS').doc(newID).set(newItem);
-
-//     return res.status(201).json({
-//       success: true,
-//       message: 'Jewelry item successfully added',
-//       data: {
-//         productId: newID,
-//         category: newItem.category,
-//         subcategory: newItem.subcategory,
-//         grossWeight: newItem.grossWeight,
-//         pricing: newItem.pricing,
-//         materialsCount: materialsUsed.length,
-//       },
-//     });
-//   } catch (error) {
-//     console.error('Error in /addItem:', error);
-//     return res.status(500).json({
-//       success: false,
-//       message: 'Internal server error',
-//       error: error.message,
-//     });
-//   }
-// });
-
 app.post('/addItem', async (req, res) => {
   try {
     const itemData = req.body;
@@ -660,6 +345,7 @@ app.post('/addItem', async (req, res) => {
       'itemsUsed',
       'gst',
       'imagelink',
+      'making',
     ];
 
     for (const field of requiredFields) {
@@ -896,11 +582,11 @@ app.get('/getAllItems', async (req, res) => {
         let makingOptions = [];
 
         if (category === 'POLKI') {
-          const making1 = netWeight * parseFloat(prices.POLKI.MAKING[i]);
-          const making2 = netWeight * parseFloat(prices.POLKI.VICTORIAN[i]);
+          const making1 = netWeight * parseFloat(prices.POLKI.POLKIMC[i]);
+          const making2 = netWeight * parseFloat(prices.POLKI.VICTORIANMC[i]);
           makingOptions = [
-            { type: 'MAKING', value: making1 },
-            { type: 'VICTORIAN', value: making2 },
+            { type: 'POLKIMC', value: making1 },
+            { type: 'VICTORIANMC', value: making2 },
           ];
           // We'll pick the matching one below
         } else {
@@ -1143,11 +829,11 @@ app.get('/getAllDrafts', async (req, res) => {
         let makingOptions = [];
 
         if (category === 'POLKI') {
-          const making1 = netWeight * parseFloat(prices.POLKI.MAKING[i]);
-          const making2 = netWeight * parseFloat(prices.POLKI.VICTORIAN[i]);
+          const making1 = netWeight * parseFloat(prices.POLKI.POLKIMC[i]);
+          const making2 = netWeight * parseFloat(prices.POLKI.VICTORIANMC[i]);
           makingOptions = [
-            { type: 'MAKING', value: making1 },
-            { type: 'VICTORIAN', value: making2 },
+            { type: 'POLKIMC', value: making1 },
+            { type: 'VICTORIANMC', value: making2 },
           ];
           // We'll pick the matching one below
         } else {
@@ -1206,7 +892,7 @@ app.get('/getAllDrafts', async (req, res) => {
               matched = true;
               console.log(`✅ Tier ${i + 1} matches with ${opt.type}`);
               // ✅ Set making = 1 for VICTORIAN, 0 for others
-              if (opt.type === 'VICTORIAN') {
+              if (opt.type === 'VICTORIANMC') {
                 item.making = 1;
               } else {
                 item.making = 0;
